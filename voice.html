@@ -1,0 +1,193 @@
+<!doctype html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>دستور صوتی ساحل</title>
+<meta name="theme-color" content="#0a3441">
+<link rel="manifest" href="voice-manifest.json">
+<link rel="icon" type="image/png" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="صوتی ساحل">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;600;800&display=swap" rel="stylesheet">
+<style>
+:root{--sea:#0a3441;--deep:#06232b;--card:#0f4352;--amber:#e8a317;--ink:#e9f3f5;--mut:#9bb6bd;--line:#1d5565;--ok:#5fd68a;--warn:#ffb4ab}
+*{box-sizing:border-box;margin:0}
+html,body{background:var(--sea);color:var(--ink);font-family:Vazirmatn,Tahoma,system-ui,sans-serif;line-height:1.8;-webkit-text-size-adjust:100%}
+body{min-height:100vh;min-height:100dvh;padding:max(16px,env(safe-area-inset-top)) 16px calc(24px + env(safe-area-inset-bottom));display:flex;justify-content:center}
+button,textarea{font:inherit;color:inherit}
+button{cursor:pointer;border:0}
+:focus-visible{outline:2px solid var(--amber);outline-offset:3px}
+main{width:min(460px,100%);display:flex;flex-direction:column;align-items:center;gap:14px}
+header{display:flex;align-items:center;gap:10px;align-self:stretch}
+header img{width:42px;height:42px;border-radius:12px;background:#fff;padding:3px;object-fit:contain}
+header h1{font-size:1.1rem;font-weight:800;line-height:1.3}
+header small{display:block;color:var(--mut);font-size:.76rem}
+.mic{position:relative;width:132px;height:132px;margin:10px 0 2px;border-radius:50%;background:var(--amber);color:var(--deep);display:grid;place-items:center;box-shadow:0 10px 30px -10px rgba(0,0,0,.6);transition:transform .15s}
+.mic:active{transform:scale(.96)}
+.mic svg{width:54px;height:54px}
+.mic.live{background:#fff}
+.mic.live::before,.mic.live::after{content:"";position:absolute;inset:0;border-radius:50%;border:2px solid var(--amber);animation:ring 1.8s ease-out infinite}
+.mic.live::after{animation-delay:.9s}
+@keyframes ring{from{transform:scale(1);opacity:.9}to{transform:scale(1.7);opacity:0}}
+#st{min-height:28px;text-align:center;font-size:.9rem;color:var(--mut)}
+#st.ok{color:var(--ok)}#st.warn{color:var(--warn)}
+textarea{width:100%;min-height:92px;resize:vertical;background:var(--deep);border:1px solid var(--line);border-radius:14px;padding:12px 14px;font-size:17px;line-height:1.8}
+textarea:focus{border-color:var(--amber);outline:0}
+.row{display:flex;gap:8px;width:100%}
+.row button{flex:1;min-height:46px;border-radius:12px;background:var(--card);border:1px solid var(--line);font-weight:600}
+.row .pri{flex:2;background:var(--amber);color:var(--deep);border-color:var(--amber);font-weight:800}
+.chk{display:flex;gap:8px;align-items:center;align-self:flex-start;font-size:.85rem;color:var(--mut)}
+.chk input{width:18px;height:18px;accent-color:var(--amber)}
+.tip{font-size:.8rem;color:var(--mut);text-align:center;max-width:42ch}
+.ex{display:flex;flex-wrap:wrap;gap:6px;justify-content:center}
+.ex button{background:transparent;border:1px solid var(--line);border-radius:99px;padding:3px 12px;font-size:.78rem;color:var(--mut)}
+.inst{background:transparent;border:1px solid var(--amber);color:var(--amber);border-radius:99px;padding:6px 18px;font-weight:600}
+[hidden]{display:none!important}
+@media (prefers-reduced-motion:reduce){.mic.live::before,.mic.live::after{animation:none;opacity:.5}}
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <img src="icons/icon-192.png" alt="">
+    <div><h1>دستور صوتی ساحل</h1><small>ساحل هوشمند</small></div>
+  </header>
+
+  <button class="mic" id="mic" type="button" aria-label="شروع یا پایان صحبت">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v4M8 22h8"/></svg>
+  </button>
+  <div id="st" role="status" aria-live="polite">برای شروع روی میکروفون بزنید</div>
+
+  <textarea id="box" dir="rtl" placeholder="متن دستور اینجا نوشته می‌شود؛ می‌توانید ویرایش یا تایپ کنید"></textarea>
+  <div class="row">
+    <button class="pri" id="send" type="button">ارسال به ساحل هوشمند</button>
+    <button id="cp" type="button">کپی</button>
+    <button id="clr" type="button">پاک</button>
+  </div>
+  <label class="chk"><input type="checkbox" id="auto" checked> ارسال خودکار پس از پایان صحبت</label>
+
+  <div class="ex" id="ex"></div>
+  <p class="tip" id="tip"></p>
+  <button class="inst" id="inst" type="button" hidden>نصب به‌عنوان اپ</button>
+  <p class="tip" id="ios" hidden>برای نصب در آیفون: دکمهٔ Share را بزنید و Add to Home Screen را انتخاب کنید.</p>
+</main>
+
+<script>
+(() => {
+'use strict';
+const $ = id => document.getElementById(id);
+const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+const ua = navigator.userAgent || '';
+const iOS = /iPad|iPhone|iPod/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+const standalone = matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+const box = $('box'), mic = $('mic'), stEl = $('st');
+const store = {
+  get(k, d) { try { const v = localStorage.getItem(k); return v === null ? d : v } catch (e) { return d } },
+  set(k, v) { try { localStorage.setItem(k, v) } catch (e) {} }
+};
+const hasOpener = () => { try { return !!(window.opener && !window.opener.closed) } catch (e) { return false } };
+const st = (m, c) => { stEl.textContent = m; stEl.className = c || '' };
+
+let rec = null, live = false, err = '', timer = 0, li = 0, dp = null;
+const LANGS = ['fa-IR', 'fa'];
+
+/* ── تشخیص گفتار ── */
+function start() {
+  if (!SR) { st('این مرورگر تشخیص گفتار ندارد؛ در کادر بنویسید یا از 🎤 کیبورد استفاده کنید.', 'warn'); box.focus(); return }
+  if (live) { rec && rec.stop(); return }
+  clearTimeout(timer); box.value = ''; err = '';
+  const r = rec = new SR();
+  r.lang = LANGS[li]; r.interimResults = true; r.continuous = false; r.maxAlternatives = 1;
+  r.onstart = () => { if (rec !== r) return; live = true; mic.classList.add('live'); st('در حال گوش دادن… صحبت کنید', '') };
+  r.onresult = ev => {
+    if (rec !== r) return;
+    let t = '';
+    for (let i = 0; i < ev.results.length; i++) t += ev.results[i][0].transcript;
+    box.value = t.trim();
+  };
+  r.onerror = ev => {
+    if (rec !== r) return;
+    const e = ev.error; err = e;
+    if (e === 'language-not-supported' && li < LANGS.length - 1) { li++; setTimeout(start, 60); return }
+    const M = {
+      'not-allowed': 'دسترسی میکروفون بسته است؛ از قفل کنار آدرس (یا تنظیمات مرورگر) آن را مجاز کنید.',
+      'service-not-allowed': 'دسترسی میکروفون یا سرویس گفتار مجاز نیست؛ تنظیمات مرورگر را بررسی کنید.',
+      'no-speech': 'صدایی شنیده نشد؛ دوباره بزنید.',
+      'audio-capture': 'میکروفونی پیدا نشد.',
+      'network': 'برای تشخیص گفتار اینترنت لازم است.',
+      'language-not-supported': 'زبان فارسی در این مرورگر پشتیبانی نمی‌شود؛ از 🎤 کیبورد استفاده کنید.'
+    };
+    if (e !== 'aborted') st(M[e] || 'خطا در تشخیص گفتار: ' + e, 'warn');
+  };
+  r.onend = () => {
+    if (rec !== r) return;
+    live = false; mic.classList.remove('live');
+    if (err) return;
+    const t = box.value.trim();
+    if (!t) { st('چیزی شنیده نشد؛ دوباره بزنید.', 'warn'); return }
+    if ($('auto').checked) { st('در حال ارسال… (برای ویرایش در کادر بزنید)', ''); timer = setTimeout(send, 1300) }
+    else st('متن را بررسی کنید و ارسال بزنید.', '');
+  };
+  try { r.start() } catch (e) { live = false; st('شروع نشد؛ دکمهٔ میکروفون را بزنید.', 'warn') }
+}
+
+/* ── ارسال: popup → opener، وگرنه BroadcastChannel/localStorage + کلیپ‌بورد ── */
+function copy(t) {
+  const fb = () => { try { box.select(); document.execCommand('copy') } catch (e) {} };
+  try { navigator.clipboard.writeText(t).catch(fb) } catch (e) { fb() }
+}
+function send() {
+  clearTimeout(timer);
+  const t = box.value.replace(/\s+/g, ' ').trim();
+  if (!t) { st('ابتدا چیزی بگویید یا بنویسید.', 'warn'); return }
+  let ok = false;
+  try { if (hasOpener()) { window.opener.postMessage({ sahelVoice: t }, '*'); ok = true } } catch (e) {}
+  if (!ok) {
+    try { const bc = new BroadcastChannel('sahel-voice'); bc.postMessage({ sahelVoice: t, t: Date.now() }); bc.close() } catch (e) {}
+    store.set('sahel_voice_msg', JSON.stringify({ text: t, t: Date.now() }));
+  }
+  copy(t);
+  if (ok) {
+    st('ارسال شد ✔ — می‌توانید این صفحه را ببندید.', 'ok');
+    setTimeout(() => { try { window.close() } catch (e) {} }, 700);
+  } else st('متن کپی شد. به «ساحل هوشمند» برگردید و Paste کنید.', 'ok');
+}
+
+/* ── رابط ── */
+mic.onclick = start;
+$('send').onclick = send;
+$('cp').onclick = () => { const t = box.value.trim(); if (t) { copy(t); st('کپی شد ✔', 'ok') } };
+$('clr').onclick = () => { clearTimeout(timer); box.value = ''; st('برای شروع روی میکروفون بزنید', ''); box.focus() };
+box.addEventListener('input', () => { clearTimeout(timer); st('ویرایش شد؛ برای ارسال دکمه را بزنید.', '') });
+$('auto').checked = store.get('sv_auto', '1') === '1';
+$('auto').onchange = e => store.set('sv_auto', e.target.checked ? '1' : '0');
+
+['موجودی بانک', 'چک‌های وصول نشده', 'لیست بدهکاران', 'فروش این ماه'].forEach(t => {
+  const b = document.createElement('button'); b.type = 'button'; b.textContent = t;
+  b.onclick = () => { box.value = t; st('برای ارسال دکمه را بزنید.', '') };
+  $('ex').appendChild(b);
+});
+$('tip').textContent = !SR
+  ? 'این مرورگر تشخیص گفتار ندارد (مثلاً Firefox). در کادر بزنید و از 🎤 کیبورد گوشی یا Win+H در ویندوز استفاده کنید.'
+  : iOS ? 'در آیفون اگر میکروفون صفحه کار نکرد، در کادر بزنید و روی کیبورد 🎤 را انتخاب کنید.'
+  : 'مبلغ را رقم یا حرف بگویید؛ مثلاً «پنج میلیون تومان».';
+if (!navigator.onLine) st('اینترنت قطع است؛ تشخیص گفتار کار نمی‌کند.', 'warn');
+
+/* ── نصب به‌عنوان اپ ── */
+addEventListener('beforeinstallprompt', e => { e.preventDefault(); dp = e; $('inst').hidden = false });
+$('inst').onclick = async () => { if (!dp) return; dp.prompt(); try { await dp.userChoice } catch (e) {} dp = null; $('inst').hidden = true };
+addEventListener('appinstalled', () => { $('inst').hidden = true; st('نصب شد ✔', 'ok') });
+if (iOS && !standalone) $('ios').hidden = false;
+if ('serviceWorker' in navigator && location.protocol === 'https:')
+  navigator.serviceWorker.register('voice-sw.js', { scope: './voice.html' }).catch(() => {});
+
+/* شروع خودکار (در iOS و Safari نیاز به لمس کاربر است) */
+if (SR && !iOS && !/[?&]manual=1/.test(location.search)) setTimeout(start, 400);
+})();
+</script>
+</body>
+</html>

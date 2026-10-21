@@ -1,0 +1,158 @@
+<!doctype html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>حسابداری هوشمند ساحل</title>
+<meta name="theme-color" content="#0a3441">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" type="image/png" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="ساحل">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<style>
+:root{--sea:#0a3441;--amber:#e8a317;--ink:#e9f3f5;--mut:#9bb6bd}
+*{box-sizing:border-box;margin:0}
+html,body{height:100%;background:var(--sea);color:var(--ink);font-family:Vazirmatn,Tahoma,system-ui,sans-serif;line-height:1.8;overflow:hidden}
+button{font:inherit;cursor:pointer;border:0;border-radius:12px;min-height:46px;padding:0 20px;font-weight:700;background:var(--amber);color:#06232b}
+button.g{background:transparent;color:var(--ink);border:1px solid #1d5565}
+:focus-visible{outline:2px solid var(--amber);outline-offset:3px}
+#app{position:fixed;left:0;right:0;top:env(safe-area-inset-top,0px);width:100%;height:calc(100% - env(safe-area-inset-top,0px) - env(safe-area-inset-bottom,0px));border:0;background:#fff}
+#splash{position:fixed;inset:0;z-index:5;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;padding:24px;text-align:center;background:var(--sea);transition:opacity .35s}
+#splash.off{opacity:0;pointer-events:none}
+#splash img{width:88px;height:88px;border-radius:22px;background:#fff;padding:6px;object-fit:contain}
+#splash h1{font-size:1.2rem;font-weight:800}
+.spin{width:28px;height:28px;border-radius:50%;border:3px solid #1d5565;border-top-color:var(--amber);animation:r .8s linear infinite}
+@keyframes r{to{transform:rotate(360deg)}}
+#msg{color:var(--mut);font-size:.9rem;max-width:34ch}
+#acts{display:flex;gap:8px;flex-wrap:wrap;justify-content:center}
+#bar{position:fixed;z-index:6;left:12px;right:12px;bottom:calc(12px + env(safe-area-inset-bottom,0px));background:#0f4352;border:1px solid var(--amber);border-radius:14px;padding:12px 14px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;font-size:.88rem}
+#bar span{flex:1;min-width:180px}
+[hidden]{display:none!important}
+@media (prefers-reduced-motion:reduce){.spin{animation-duration:2.4s}}
+</style>
+</head>
+<body>
+
+<div id="splash">
+  <img src="icons/icon-192.png" alt="">
+  <h1>حسابداری هوشمند ساحل</h1>
+  <div class="spin" id="spin" aria-hidden="true"></div>
+  <div id="msg" role="status">در حال اتصال…</div>
+  <div id="acts" hidden>
+    <button id="retry" type="button">تلاش دوباره</button>
+    <button id="direct" type="button" class="g">باز کردن مستقیم</button>
+  </div>
+</div>
+
+<iframe id="app" title="حسابداری هوشمند ساحل" allow="clipboard-write; fullscreen" referrerpolicy="no-referrer-when-downgrade" hidden></iframe>
+
+<div id="bar" hidden>
+  <span>برای ورود با حساب گوگل، برنامه باید مستقیم باز شود (مرورگر شما کوکی گوگل را داخل این قاب نمی‌دهد).</span>
+  <button id="go" type="button">باز کردن مستقیم</button>
+  <button id="no" type="button" class="g">بعداً</button>
+</div>
+
+<script>
+/* ═══════════════════════════════════════════════
+   تنظیم: فقط همین خط را عوض کنید
+   آدرس دیپلوی وب‌اپ Apps Script (باید به /exec ختم شود)
+   ═══════════════════════════════════════════════ */
+const APP_URL = 'PASTE_YOUR_GOOGLE_SCRIPT_EXEC_URL_HERE';
+
+/* 'auto' = خودکار | 'iframe' = همیشه داخل اپ | 'direct' = همیشه مستقیم */
+const MODE = 'auto';
+
+(() => {
+'use strict';
+const $ = id => document.getElementById(id);
+const frame = $('app');
+const OK = /^https:\/\/script\.google\.com\/(?:a\/macros\/[^\/]+|macros)\/s\/[\w-]+\/exec$/;
+const q = new URLSearchParams(location.search);
+const ls = {
+  get(k) { try { return localStorage.getItem(k) } catch (e) { return null } },
+  set(k, v) { try { localStorage.setItem(k, v) } catch (e) {} },
+  del(k) { try { localStorage.removeItem(k) } catch (e) {} }
+};
+const ua = navigator.userAgent || '';
+const iOS = /iPad|iPhone|iPod/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+const deskSafari = /Safari\//.test(ua) && !/Chrome|Chromium|Edg|OPR|SamsungBrowser|Android/.test(ua);
+let loaded = false, ready = false, tm = 0;
+
+const msg = (t, acts) => { $('msg').textContent = t; $('acts').hidden = !acts; $('spin').hidden = !!acts };
+const hideSplash = () => $('splash').classList.add('off');
+function directUrl() { return APP_URL }
+function goDirect() { ls.set('sahel_mode', 'direct'); location.replace(directUrl()) }
+function mode() {
+  if (q.get('direct') === '1') return 'direct';
+  if (q.get('iframe') === '1') { ls.del('sahel_mode'); return 'iframe' }
+  if (MODE !== 'auto') return MODE;
+  return ls.get('sahel_mode') || ((iOS || deskSafari) ? 'direct' : 'iframe');
+}
+
+/* ── بازنشانی کامل کش و سرویس‌ورکر: index.html?reset=1 ── */
+async function reset() {
+  msg('در حال پاک‌سازی کش…');
+  try { (await navigator.serviceWorker.getRegistrations()).forEach(r => r.unregister()) } catch (e) {}
+  try { (await caches.keys()).forEach(k => caches.delete(k)) } catch (e) {}
+  ls.del('sahel_mode');
+  location.replace(location.pathname);
+}
+
+/* ── اجرا ── */
+function boot() {
+  if (q.get('reset') === '1') return reset();
+  if (!OK.test(APP_URL)) {
+    msg('آدرس دیپلوی تنظیم نشده است. در فایل index.html مقدار APP_URL را با آدرس /exec وب‌اپ جایگزین کنید.', false);
+    $('spin').hidden = true; return;
+  }
+  if (!navigator.onLine) {
+    msg('اینترنت قطع است. پس از اتصال دوباره امتحان کنید.', true);
+    addEventListener('online', () => location.reload(), { once: true }); return;
+  }
+  if (mode() === 'direct') { msg('در حال باز کردن برنامه…'); location.replace(directUrl()); return }
+  msg('در حال اتصال…');
+  frame.onload = () => { loaded = true; setTimeout(hideSplash, 500) };
+  frame.hidden = false;
+  frame.src = APP_URL;
+  tm = setTimeout(() => { if (!loaded) msg('اتصال طول کشید. دوباره امتحان کنید یا برنامه را مستقیم باز کنید.', true) }, 12000);
+}
+$('retry').onclick = () => location.reload();
+$('direct').onclick = goDirect;
+$('go').onclick = goDirect;
+$('no').onclick = () => { $('bar').hidden = true };
+
+/* ── پیام‌های برنامهٔ داخل قاب (اختیاری؛ در Index.html اسکریپت گوگل ارسال می‌شود) ── */
+addEventListener('message', ev => {
+  if (!/^https:\/\/([\w-]+\.)*googleusercontent\.com$/.test(ev.origin) && ev.origin !== 'https://script.google.com') return;
+  const d = ev.data;
+  if (!d || typeof d !== 'object' || !d.sahel) return;
+  if (d.sahel === 'ready') { ready = true; clearTimeout(tm); hideSplash() }
+  else if (d.sahel === 'needdirect' && mode() === 'iframe') { hideSplash(); $('bar').hidden = false }
+  else if (d.sahel === 'reload') location.reload();
+});
+
+/* ── پل دستور صوتی: وقتی voice.html مستقل (اپ نصب‌شده) باز است، متن را به برنامهٔ داخل قاب می‌رساند ── */
+function relay(text) {
+  const m = { sahelVoice: String(text || '').slice(0, 300) };
+  if (!m.sahelVoice || !frame.contentWindow) return;
+  (function walk(w, d) {
+    try { w.postMessage(m, '*') } catch (e) {}
+    if (d >= 3) return;
+    for (let i = 0; i < 10; i++) { let c; try { c = w.frames[i] } catch (e) { break } if (!c) break; walk(c, d + 1) }
+  })(frame.contentWindow, 0);
+}
+try { const bc = new BroadcastChannel('sahel-voice'); bc.onmessage = e => e.data && e.data.sahelVoice && relay(e.data.sahelVoice) } catch (e) {}
+addEventListener('storage', e => { if (e.key === 'sahel_voice_msg' && e.newValue) { try { relay(JSON.parse(e.newValue).text) } catch (_) {} } });
+
+/* ── سرویس‌ورکر ── */
+if ('serviceWorker' in navigator && location.protocol === 'https:')
+  navigator.serviceWorker.register('sw.js').catch(() => {});
+
+boot();
+})();
+</script>
+</body>
+</html>
