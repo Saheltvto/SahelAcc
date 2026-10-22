@@ -150,7 +150,73 @@ addEventListener('storage', e => { if (e.key === 'sahel_voice_msg' && e.newValue
 /* ── سرویس‌ورکر ── */
 if ('serviceWorker' in navigator && location.protocol === 'https:')
   navigator.serviceWorker.register('sw.js').catch(() => {});
-
+/* ══ دستور صوتی درون‌برنامه‌ای (v6.4): تشخیص گفتار در همین صفحه، نتیجه به برنامهٔ داخل قاب ══ */
+const VO = { on: false, rec: null, st: null, ctx: null, raf: 0, t: 0 };
+const fromApp = ev => /^https:\/\/([\w-]+\.)*googleusercontent\.com$/.test(ev.origin) || ev.origin === 'https://script.google.com';
+function toApp(o) {
+  if (!frame.contentWindow) return;
+  const m = { sahelVoice2: o };
+  (function walk(w, d) {
+    try { w.postMessage(m, '*') } catch (e) {}
+    if (d >= 3) return;
+    for (let i = 0; i < 10; i++) { let c; try { c = w.frames[i] } catch (e) { break } if (!c) break; walk(c, d + 1) }
+  })(frame.contentWindow, 0);
+}
+function vStop() {
+  cancelAnimationFrame(VO.raf);
+  try { VO.st && VO.st.getTracks().forEach(t => t.stop()) } catch (e) {}
+  try { VO.ctx && VO.ctx.close() } catch (e) {}
+  VO.st = VO.ctx = null;
+}
+async function vWave() {
+  try {
+    const st = await navigator.mediaDevices.getUserMedia({ audio: true });
+    if (!VO.on) { st.getTracks().forEach(t => t.stop()); return }
+    VO.st = st;
+    const AC = window.AudioContext || window.webkitAudioContext;
+    VO.ctx = new AC();
+    const an = VO.ctx.createAnalyser(); an.fftSize = 1024;
+    VO.ctx.createMediaStreamSource(st).connect(an);
+    const buf = new Uint8Array(an.fftSize);
+    const loop = ts => {
+      if (!VO.on) return;
+      if (ts - VO.t > 50) {
+        VO.t = ts; an.getByteTimeDomainData(buf);
+        const a = []; for (let i = 0; i < buf.length; i += 16) a.push(buf[i]);
+        toApp({ state: 'lv', a });
+      }
+      VO.raf = requestAnimationFrame(loop);
+    };
+    loop(0);
+  } catch (e) {}
+}
+function voiceStart() {
+  if (VO.on) { try { VO.rec.stop() } catch (e) {} return }
+  const Rc = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!Rc) { toApp({ state: 'end', err: 'unsupported' }); return }
+  const r = new Rc();
+  r.lang = 'fa-IR'; r.interimResults = true; r.continuous = false; r.maxAlternatives = 1;
+  VO.rec = r;
+  let fin = '', err = '', last = '';
+  r.onstart = () => { VO.on = true; toApp({ state: 'start' }); vWave() };
+  r.onresult = ev => {
+    let t = '', f = '';
+    for (let i = 0; i < ev.results.length; i++) { const x = ev.results[i][0].transcript; t += x; if (ev.results[i].isFinal) f += x }
+    if (f) fin = f; last = t;
+    toApp({ state: 'txt', t });
+  };
+  r.onerror = ev => { err = ev.error || 'x' };
+  r.onend = () => { VO.on = false; vStop(); toApp({ state: 'end', err, t: (fin || last || '').trim() }) };
+  try { r.start() } catch (e) { toApp({ state: 'end', err: 'start' }) }
+}
+addEventListener('message', ev => {
+  if (!fromApp(ev)) return;
+  const d = ev.data;
+  if (!d || typeof d !== 'object' || d.sahelCmd !== 'voice') return;
+  toApp({ state: 'ack' });                       /* به برنامه می‌گوید پوسته هست */
+  if (d.act === 'stop') { try { VO.rec && VO.rec.stop() } catch (e) {} }
+  else voiceStart();
+});
 boot();
 })();
 </script>
