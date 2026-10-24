@@ -152,6 +152,7 @@ if ('serviceWorker' in navigator && location.protocol === 'https:')
   navigator.serviceWorker.register('sw.js').catch(() => {});
 /* ══ دستور صوتی درون‌برنامه‌ای (v6.4): تشخیص گفتار در همین صفحه، نتیجه به برنامهٔ داخل قاب ══ */
 const VO = { on: false, rec: null, st: null, ctx: null, raf: 0, t: 0 };
+  const MOB = iOS || /Android|Mobile/i.test(ua);
 const fromApp = ev => /^https:\/\/([\w-]+\.)*googleusercontent\.com$/.test(ev.origin) || ev.origin === 'https://script.google.com';
 function toApp(o) {
   if (!frame.contentWindow) return;
@@ -190,31 +191,69 @@ async function vWave() {
     loop(0);
   } catch (e) {}
 }
+function voiceStop() {
+  if (!VO.on || !VO.rec) return;
+  const r = VO.rec;
+  try { r.stop() } catch (e) {}
+  clearTimeout(VO.kill);
+  /* اگر onend در اندروید نیامد، پس از ۱٫۵ ثانیه اجباری ببند */
+  VO.kill = setTimeout(() => { if (VO.rec === r && VO.on && r.onend) r.onend() }, 1500);
+}
 function voiceStart() {
-  if (VO.on) { try { VO.rec.stop() } catch (e) {} return }
   const Rc = window.SpeechRecognition || window.webkitSpeechRecognition;
   if (!Rc) { toApp({ state: 'end', err: 'unsupported' }); return }
+  /* نشست قبلیِ گیرکرده را رها کن */
+  if (VO.rec) { const o = VO.rec; VO.rec = null; try { o.abort() } catch (e) {} }
+  clearTimeout(VO.guard); clearTimeout(VO.kill); vStop(); VO.on = false;
+
   const r = new Rc();
   r.lang = 'fa-IR'; r.interimResults = true; r.continuous = false; r.maxAlternatives = 1;
   VO.rec = r;
-  let fin = '', err = '', last = '';
-  r.onstart = () => { VO.on = true; toApp({ state: 'start' }); vWave() };
+  let fin = '', last = '', err = '', ended = false;
+
+  r.onstart = () => {
+    if (VO.rec !== r) return;
+    VO.on = true;
+    toApp({ state: 'start' });
+    if (!MOB) vWave();                       /* موبایل: بدون getUserMedia */
+    VO.guard = setTimeout(() => { try { r.stop() } catch (e) {} }, 15000);
+  };
+  r.onspeechend = () => { try { r.stop() } catch (e) {} };
   r.onresult = ev => {
+    if (VO.rec !== r) return;
     let t = '', f = '';
-    for (let i = 0; i < ev.results.length; i++) { const x = ev.results[i][0].transcript; t += x; if (ev.results[i].isFinal) f += x }
-    if (f) fin = f; last = t;
+    if (MOB) {                               /* اندروید: آخرین ردیف = متن تجمعی */
+      const x = ev.results[ev.results.length - 1];
+      t = x[0].transcript;
+      if (x.isFinal) f = t;
+    } else {
+      for (let i = 0; i < ev.results.length; i++) {
+        const x = ev.results[i][0].transcript;
+        t += x;
+        if (ev.results[i].isFinal) f += x;
+      }
+    }
+    if (f) fin = f;
+    last = t;
     toApp({ state: 'txt', t });
   };
   r.onerror = ev => { err = ev.error || 'x' };
-  r.onend = () => { VO.on = false; vStop(); toApp({ state: 'end', err, t: (fin || last || '').trim() }) };
-  try { r.start() } catch (e) { toApp({ state: 'end', err: 'start' }) }
+  r.onend = () => {
+    if (ended || VO.rec !== r) return;
+    ended = true;
+    clearTimeout(VO.guard); clearTimeout(VO.kill);
+    VO.on = false; VO.rec = null; vStop();
+    const t = (fin || last || '').trim();
+    toApp({ state: 'end', err: t ? '' : (err || 'no-speech'), t });
+  };
+  try { r.start() } catch (e) { VO.rec = null; toApp({ state: 'end', err: 'start' }) }
 }
 addEventListener('message', ev => {
   if (!fromApp(ev)) return;
   const d = ev.data;
   if (!d || typeof d !== 'object' || d.sahelCmd !== 'voice') return;
   toApp({ state: 'ack' });                       /* به برنامه می‌گوید پوسته هست */
-  if (d.act === 'stop') { try { VO.rec && VO.rec.stop() } catch (e) {} }
+  if (d.act === 'stop') voiceStop();
   else voiceStart();
 });
 boot();
